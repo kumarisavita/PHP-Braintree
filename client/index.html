@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+  	<script src="https://js.braintreegateway.com/web/dropin/1.14.1/js/dropin.min.js"></script>
+  	<!-- Load PayPal's checkout.js Library. -->
+	<script src="https://www.paypalobjects.com/api/checkout.js" data-version-4 log-level="warn"></script>
+	<!-- Load the client component. -->
+	<script src="https://js.braintreegateway.com/web/3.39.0/js/client.min.js"></script>
+	<!-- Load the PayPal Checkout component. -->
+	<script src="https://js.braintreegateway.com/web/3.39.0/js/paypal-checkout.min.js"></script>
+	<!-- bootstrp -->
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <script src="../server/index.js"></script>
+
+</head>
+<body>
+  <!-- <div id="dropin-container"></div> -->
+  <span id="dropin-container"></span><br>
+  <b>Token:</b> <span id="newCustToken"></span><br>
+  <b>Nonce:</b> <span id="newCustNonce"></span><br>
+  <b>CreditCardToken:</b> <span id="ccToken"></span><br>
+  <div id="plansHtml"></div><br>
+  <button id="createCustomer">Create Customer</button><br>
+  <button id="createToken">Create Token</button><br>
+  <button id="runDropIn">Run Drop In</button><br>
+  <button id="submit-button">Request payment method Nonce</button><br>
+  <button id="createPaymentMethod">Create Payment Method</button><br>
+  <hr>
+  <button id="getAllPlans">Get All Plans</button><br>
+
+	<script>
+	var baseUrlServer = "http://localhost:8081" 
+	var currentToken = "";
+	$(document).ready(function(){
+
+		// create customer
+	    $("#createCustomer").click(function(){
+	        $.post(baseUrlServer + "/creaeteCustomer",
+	        {
+	          name: "Donald Duck",
+	          city: "Duckburg"
+	        },
+	        function(data,status){
+	            alert("Data: " + data + "\nStatus: " + status);
+	        });
+	    });
+	    // create token for customer
+	   	$("#createToken").click(function(e2){
+	   		e2.preventDefault();
+	   		console.log("cliked");
+	        $.ajax({
+				type : "POST",
+				headers: {
+				  'Content-Type': 'application/x-www-form-urlencoded'
+				},
+				//url : "http://112.196.86.45:4000/api/v1/braintree/client_token_noverify",
+				url : "http://localhost:4000/api/v1/braintree/client_token_noverify",
+                //url : "http://localhost:8081/client_token",
+				data : JSON.stringify({id : 101}),
+				dataType : 'json',
+				success : function(data) {
+					$("#newCustToken").text(data.response.token);
+				},
+				error : function(e) {
+					alert("Error!")
+					console.log("ERROR: ", e);
+				}
+			});
+			return false;
+
+	    });
+
+	    // ************** Subscription Ajax Code Starts Here ****************************
+	    // get All Plans 
+	   	$("#getAllPlans").click(function(e2){
+	   		e2.preventDefault();
+	        $.ajax({
+				type : "POST",
+				headers: {
+				  'Content-Type': 'application/x-www-form-urlencoded'
+				},
+				url : "http://localhost:8081/get-all-plans",
+				data : JSON.stringify({id : 24}),
+				dataType : 'json',
+				success : function(data) {
+					//$("#newCustToken").text(data.response.token);
+					var plansData = data.response.plansData.plans;
+					var htmlPlans = '<div class="container"><div class="panel-group">';
+					$.each(plansData, function (index, value) {
+						htmlPlans += 
+						'<div class="panel panel-primary" style="width:32%;float:left;">'+
+					     	'<div class="panel-heading"> <h2>' + value.name + ' </h2> </div>'+
+					      	'<div class="panel-body"> <h4> Plan Id: ' + value.id + ' </h4> </div>'+
+					      	'<div class="panel-body"> <h4> Merchant Id: ' + value.merchantId + ' </h4> </div>'+
+					      	'<div class="panel-body"> <h4> Price: ' + value.price + ' </h4> </div>'+
+					      	'<div class="panel-body"> <button type="button" class="btn btn-info subscribeBtn" planId="' + value.id + '"> Subscribe </button> </div>'+
+					    '</div>';
+					});
+					htmlPlans += '</div></div>';
+					$("#plansHtml").html(htmlPlans);
+					console.log(data.response.plansData.plans);
+				},
+				error : function(e) {
+					alert("Error!")
+					console.log("ERROR: ", e);
+				}
+			});
+			return false;
+
+	    });
+
+	   	//Create Subscription
+	   	$(document).on("click", ".subscribeBtn", function(e4){
+	  		e4.preventDefault();
+	  		var planId = $(this).attr("planId");
+	  		var ccToken = $("#ccToken").text();
+	  		$.ajax({
+				type : "POST",
+				headers: {
+				  'Content-Type': 'application/json'
+				},
+				url : "http://localhost:8081/create-subscription",
+				data : JSON.stringify({planId:planId, ccToken:ccToken }),
+				dataType : 'json',
+				success : function(data) {
+					console.log(data);
+					// $("#ccToken").text(data.response.ccToken);
+				},
+				error : function(e) {
+					alert("Error!")
+					console.log("ERROR: ", e);
+				}
+			});
+			return false;
+	  	});
+	    // code for dropin
+	  	$("#runDropIn").click(function(e1){
+	  		e1.preventDefault();
+			var button = document.querySelector('#submit-button');
+			var updatedToken = $("#newCustToken").text();
+
+			alert(updatedToken);
+
+			braintree.dropin.create({
+				authorization: ''+updatedToken,
+				container: '#dropin-container',
+				paypal: {
+					flow: 'vault'
+				}
+			}, function (createErr, instance) {
+				$("#submit-button").click(function(e){
+					e.preventDefault();
+					instance.requestPaymentMethod(function (err, payload) {
+						$("#newCustNonce").text(payload.nonce);
+						alert(payload.nonce);
+					 /* Submit payload.nonce to your server
+					 make one time payement */
+					  	$.ajax({
+							type : "POST",
+							headers: {
+							  	'Content-Type': 'application/json'
+							},
+							//url : "http://112.196.86.45:4000/api/v1/braintree/checkout_noverify",
+							url : "http://localhost:4000/api/v1/braintree/checkout_noverify",
+                            //url : "http://localhost:8081/checkout",
+
+							data : JSON.stringify({"nonce": payload.nonce, "chargeAmount": "19.55", "email":"savita.kumari@trantorinc.com", "price":"1", "quantity":"10", "customerId":"346", "billingAddress":{"address_line_1":"Chd 134/1 Level 3", "address_line_2":"Chandigarh", "city":"Chd", "default_addr":"1", "landmark":"Krishna Market", "name":"Test Customer", "phone":"7018165766", "state": "Chandigarh", "zipcode":"160036"}}),
+
+							//data : JSON.stringify({"nonce": payload.nonce, "chargeAmount":"19.55","email":"savita.kumari@trantorinc.com","nonce":"cd2ef432-c1a1-09dc-6ae3-2ff8791053c5","price":"1","quantity":"23","customerId":"346", "billingAddress":{"address_line_1":"gqyzyuahajq","city":"jHzuqiq","default_addr":0,"name":"kiran","phone":"9735137846","state":"uahahhqhq","zipcode":"676464949"}}),
+
+							//data : JSON.stringify({payload: payload, email: 'savita.kumari@trantorinc.com', name: 'saviTest', quantity:'10', price: '10.00', customerId:'301'}),
+							
+                            dataType: 'json',
+                            success : function(data) {
+								$("#newCustToken").text(data.response.token);
+								console.log('insert data into table');
+							},
+							error : function(e) {
+								alert("Error!")
+								console.log("ERROR: ", e);
+							}
+						});
+						return false;
+					});
+				});
+			});
+	    });
+
+	  	// create Payment Method
+	   	$("#createPaymentMethod").click(function(e3){
+	   		e3.preventDefault();
+	   		var newCustNonce = $("#newCustNonce").text();
+	        $.ajax({
+				type : "POST",
+				headers: {
+				  'Content-Type': 'application/json'
+				},
+				url : "http://localhost:8081/create-payment-method",
+				data : JSON.stringify({newCustNonce : newCustNonce}),
+				dataType : 'json',
+				success : function(data) {
+					console.log(data.response.ccToken);
+					$("#ccToken").text(data.response.ccToken);
+				},
+				error : function(e) {
+					alert("Error!")
+					console.log("ERROR: ", e);
+				}
+			});
+			return false;
+
+	    });
+
+
+	});
+
+
+
+  </script>
+</body>
